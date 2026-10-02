@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>☢ Квиз с Ядерками</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080c10;
+  color: #e0e0e0;
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 100vh;
+}
+#root { position: relative; overflow: hidden; min-height: 100vh; }
+#bgC  { position: fixed; top:0; left:0; width:100%; height:100%; z-index:0; opacity:.10; pointer-events:none; }
+#fOv  { position: fixed; inset:0; background:#fff; z-index:60; opacity:0; pointer-events:none; }
+#gC   { position: fixed; top:0; left:0; width:100%; height:100%; z-index:55; opacity:0; pointer-events:none; }
+#app  { position:relative; z-index:10; max-width:680px; margin:0 auto; padding:24px 16px; }
+h1   { text-align:center; font-size:28px; font-weight:700; color:#ff3333; letter-spacing:5px; text-shadow:0 0 14px #ff000055; margin-bottom:4px; }
+.sub { text-align:center; font-size:11px; color:#555; letter-spacing:3px; margin-bottom:22px; }
+.hbar{
+  display:flex; justify-content:space-between; align-items:center;
+  background:rgba(255,50,50,.07); border:1px solid rgba(255,50,50,.2);
+  border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:13px; color:#777;
+}
+.hbar .v { color:#ff4444; font-weight:700; font-size:15px; }
+.prog { background:rgba(255,255,255,.06); height:3px; border-radius:4px; margin-bottom:20px; overflow:hidden; }
+#pb   { height:100%; background:#ff4444; width:0%; transition:width .4s ease; box-shadow:0 0 6px #ff444477; }
+.qcard{
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
+  border-radius:10px; padding:18px; margin-bottom:14px;
+  transition:border-color .25s;
+}
+.qnum { font-size:10px; color:#ff4444; letter-spacing:2px; margin-bottom:8px; }
+.qtxt { font-size:14px; color:#ddd; margin-bottom:14px; line-height:1.5; }
+.agrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.abtn {
+  padding:10px 12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09);
+  color:#aaa; cursor:pointer; border-radius:7px; font-family:inherit; font-size:13px;
+  text-align:left; line-height:1.3; transition:all .13s;
+}
+.abtn:hover:not([disabled]){ background:rgba(80,180,255,.1); border-color:rgba(80,180,255,.3); color:#fff; }
+.abtn.ok { background:rgba(0,210,100,.12); border-color:#00d264; color:#00d264; }
+.abtn.no { background:rgba(255,50,50,.12); border-color:#ff3232; color:#ff3232; }
+.abtn[disabled]{ cursor:default; }
+.nk,.pt{ position:fixed; pointer-events:none; transform:translate(-50%,-50%); }
+.nk { z-index:45; font-size:30px; }
+.pt { z-index:44; }
+</style>
+</head>
+<body>
+<div id="root">
+  <canvas id="bgC"></canvas>
+  <div id="fOv"></div>
+  <canvas id="gC"></canvas>
+  <div id="app">
+    <h1>&#9762; КВИЗ &#9762;</h1>
+    <p class="sub">ОТВЕЧАЙ &middot; ВЗРЫВАЙ &middot; ПОВТОРЯЙ</p>
+    <div class="hbar">
+      <span>Раунд <span class="v" id="rN">1</span></span>
+      <span>Счёт: <span class="v" id="scN">0</span></span>
+      <span><span id="aN">0</span>&nbsp;/&nbsp;<span id="tN">5</span></span>
+    </div>
+    <div class="prog"><div id="pb"></div></div>
+    <div id="qC"></div>
+  </div>
+</div>
+<script>
+// ──────────────────────────────────────────────────────────────
+// POOL — 30 вопросов
+// ──────────────────────────────────────────────────────────────
+const POOL = [
+  {q:"Какая планета ближайшая к Солнцу?",        c:"Меркурий",             w:["Венера","Земля","Марс"]},
+  {q:"Химический символ золота?",                 c:"Au",                   w:["Ag","Fe","Cu"]},
+  {q:"Сколько океанов на Земле?",                 c:"5",                    w:["4","3","6"]},
+  {q:"Кто написал «Войну и мир»?",                c:"Лев Толстой",          w:["Достоевский","Пушкин","Гоголь"]},
+  {q:"Какой газ преобладает в атмосфере?",        c:"Азот",                 w:["Кислород","CO₂","Аргон"]},
+  {q:"Крупнейшая страна по площади?",             c:"Россия",               w:["Китай","США","Канада"]},
+  {q:"Сколько цветов в радуге?",                  c:"7",                    w:["6","8","5"]},
+  {q:"Самая высокая гора мира?",                  c:"Эверест",              w:["К2","Канченджанга","Лхоцзе"]},
+  {q:"Самая большая планета Солнечной системы?",  c:"Юпитер",               w:["Сатурн","Уран","Нептун"]},
+  {q:"Сколько минут в сутках?",                   c:"1440",                 w:["1200","1800","1320"]},
+  {q:"Столица Австралии?",                        c:"Канберра",             w:["Сидней","Мельбурн","Брисбен"]},
+  {q:"Сколько хромосом у человека?",              c:"46",                   w:["44","48","23"]},
+  {q:"Год первой высадки на Луну?",               c:"1969",                 w:["1968","1971","1972"]},
+  {q:"Формула воды?",                             c:"H₂O",                  w:["CO₂","H₂O₂","NaCl"]},
+  {q:"Кто изобрёл телефон?",                      c:"А. Г. Белл",           w:["Эдисон","Маркони","Тесла"]},
+  {q:"Сколько планет в Солнечной системе?",       c:"8",                    w:["9","7","10"]},
+  {q:"Самая длинная река мира?",                  c:"Нил",                  w:["Амазонка","Янцзы","Миссисипи"]},
+  {q:"Кто написал «Гамлета»?",                    c:"Шекспир",              w:["Байрон","Мильтон","Чосер"]},
+  {q:"Столица Японии?",                           c:"Токио",                w:["Осака","Киото","Саппоро"]},
+  {q:"Что быстрее: звук или свет?",               c:"Свет",                 w:["Звук","Одинаково","Зависит"]},
+  {q:"Сколько костей у взрослого человека?",      c:"206",                  w:["208","196","212"]},
+  {q:"Скорость света (км/с)?",                    c:"~300 000",             w:["~150 000","~450 000","~200 000"]},
+  {q:"Что производит инсулин?",                   c:"Поджелудочная железа", w:["Печень","Почки","Желудок"]},
+  {q:"Сколько секунд в часе?",                    c:"3600",                 w:["3000","4200","6000"]},
+  {q:"Язык программирования Гвидо ван Россума?",  c:"Python",               w:["Java","Ruby","Perl"]},
+  {q:"Самый тяжёлый металл?",                     c:"Осмий",                w:["Золото","Платина","Свинец"]},
+  {q:"Столица Бразилии?",                         c:"Бразилиа",             w:["Рио-де-Жанейро","Сан-Паулу","Сальвадор"]},
+  {q:"Кто написал «Преступление и наказание»?",   c:"Достоевский",          w:["Толстой","Чехов","Тургенев"]},
+  {q:"Букв в русском алфавите?",                  c:"33",                   w:["32","34","30"]},
+  {q:"Сторон у шестиугольника?",                  c:"6",                    w:["5","7","8"]},
+];
+
+// ──────────────────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────────────────
+const N = 5;
+let used = new Set(), score = 0, round = 1, answered = 0, busy = false;
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function shuffle(a) {
+  const b = [...a];
+  for (let i = b.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+  return b;
+}
+
+// ──────────────────────────────────────────────────────────────
+// QUESTIONS
+// ──────────────────────────────────────────────────────────────
+function getQs() {
+  let av = POOL.map((_, i) => i).filter(i => !used.has(i));
+  if (av.length < N) { used.clear(); av = POOL.map((_, i) => i); }
+  const sel = shuffle(av).slice(0, N);
+  sel.forEach(i => used.add(i));
+  return sel.map(i => {
+    const { q, c, w } = POOL[i];
+    const opts = shuffle([c, ...w]);
+    return { q, opts, ci: opts.indexOf(c) };
+  });
+}
+
+// ──────────────────────────────────────────────────────────────
+// RENDER
+// ──────────────────────────────────────────────────────────────
+function render(qs) {
+  const qC = $('qC');
+  qC.innerHTML = '';
+  answered = 0;
+  $('aN').textContent = 0;
+  $('tN').textContent = N;
+  $('rN').textContent = round;
+  $('pb').style.width = '0%';
+  qs.forEach((d, qi) => {
+    const card = document.createElement('div');
+    card.className = 'qcard';
+    card.id = 'q' + qi;
+    card.innerHTML = `<div class="qnum">ВОПРОС ${qi + 1}</div><div class="qtxt">${d.q}</div><div class="agrid" id="g${qi}"></div>`;
+    qC.appendChild(card);
+    const g = $('g' + qi);
+    d.opts.forEach((o, ai) => {
+      const btn = document.createElement('button');
+      btn.className = 'abtn';
+      btn.textContent = o;
+      btn.onclick = () => { if (!busy) pick(btn, qi, ai, d.ci, g); };
+      g.appendChild(btn);
+    });
+  });
+}
+
+function pick(btn, qi, ai, ci, g) {
+  g.querySelectorAll('.abtn').forEach((b, i) => {
+    b.disabled = true;
+    if (i === ci) b.classList.add('ok');
+  });
+  if (ai === ci) { score++; $('scN').textContent = score; }
+  else btn.classList.add('no');
+  answered++;
+  $('aN').textContent = answered;
+  $('pb').style.width = (answered / N * 100) + '%';
+  if (answered === N) { busy = true; setTimeout(nukeSeq, 650); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// NUCLEAR SEQUENCE
+// ──────────────────────────────────────────────────────────────
+async function nukeSeq() {
+  const cards = [];
+  for (let i = 0; i < N; i++) { const e = $('q' + i); if (e) cards.push(e); }
+
+  await Promise.all(cards.map((c, i) =>
+    new Promise(r => setTimeout(() => fly(c).then(r), i * 210))
+  ));
+
+  await sleep(150);
+  await doFlash();
+  await doMatrix();
+
+  round++;
+  busy = false;
+  const newQs = getQs();
+  const qC = $('qC');
+  qC.style.cssText = 'opacity:0;transform:scale(0.95);transition:none';
+  await sleep(60);
+  render(newQs);
+  qC.style.cssText = 'transition:opacity .5s,transform .5s;opacity:1;transform:scale(1)';
+}
+
+function fly(card) {
+  return new Promise(res => {
+    const cr = card.getBoundingClientRect();
+    const tx = cr.left + cr.width / 2;
+    const ty = cr.top + cr.height / 2;
+    const sx = Math.random() * window.innerWidth;
+    const sy = -60;
+
+    const el = document.createElement('div');
+    el.className = 'nk';
+    el.textContent = '\u2622';   // ☢
+    el.style.left = sx + 'px';
+    el.style.top  = sy + 'px';
+    document.body.appendChild(el);
+
+    const dur = 650 + Math.random() * 300, t0 = performance.now();
+    function frame(now) {
+      const t = Math.min((now - t0) / dur, 1);
+      const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      el.style.left = (sx + (tx - sx) * e) + 'px';
+      el.style.top  = (sy + (ty - sy) * e) + 'px';
+      el.style.transform = `translate(-50%,-50%) rotate(${t * 450}deg) scale(${0.35 + t})`;
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        el.remove();
+        boom(tx, ty, card);
+        setTimeout(res, 400);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function boom(x, y, card) {
+  ['💥', '🔥', '💥', '🔥', '⚡'].forEach((em, i) => {
+    const p = document.createElement('div');
+    p.className = 'pt';
+    p.textContent = em;
+    p.style.left = x + 'px';
+    p.style.top  = y + 'px';
+    p.style.fontSize = (16 + Math.random() * 18 | 0) + 'px';
+    document.body.appendChild(p);
+    const a = (i / 5) * Math.PI * 2;
+    const d = 48 + Math.random() * 52;
+    const dx = Math.cos(a) * d, dy = Math.sin(a) * d;
+    p.animate([
+      { transform: 'translate(-50%,-50%) scale(0)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.6)`, opacity: 0.9, offset: 0.45 },
+      { transform: `translate(calc(-50% + ${dx * 2}px),calc(-50% + ${dy * 2}px)) scale(0)`, opacity: 0 }
+    ], { duration: 580, easing: 'ease-out' }).onfinish = () => p.remove();
+  });
+
+  if (card) {
+    card.animate([
+      {transform:'translate(0)'}, {transform:'translate(-5px,4px)'},
+      {transform:'translate(5px,-4px)'}, {transform:'translate(-4px,-4px)'},
+      {transform:'translate(4px,4px)'}, {transform:'translate(0)'}
+    ], { duration: 240 });
+    card.style.borderColor = 'rgba(255,70,70,.55)';
+    setTimeout(() => card.style.borderColor = '', 450);
+  }
+}
+
+async function doFlash() {
+  const o = $('fOv');
+  o.style.transition = 'none';
+  o.style.opacity = '1';
+  await sleep(980);
+  o.style.transition = 'opacity 0.3s';
+  o.getBoundingClientRect(); // force reflow → ensures transition applies cleanly
+  o.style.opacity = '0';
+  await sleep(350);
+}
+
+async function doMatrix() {
+  const c = $('gC');
+  c.width  = window.innerWidth;
+  c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  c.style.opacity = '1';
+
+  const chars = 'アイウエオカキ01☢✗⚡█▓░◼◻'.split('');
+  const fs = 13;
+  const cols = Math.floor(c.width / fs);
+  const drops = Array.from({ length: cols }, () => Math.random() * -35);
+  let fr = 0;
+
+  return new Promise(done => {
+    function tick() {
+      ctx.fillStyle = `rgba(0,0,0,${fr > 38 ? 0.15 : 0.07})`;
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.font = fs + 'px monospace';
+      for (let i = 0; i < drops.length; i++) {
+        const brt = Math.random();
+        ctx.fillStyle = fr < 13
+          ? `rgb(${(brt * 220) | 0},0,0)`
+          : `rgb(0,${(130 + brt * 125) | 0},${(brt * 40) | 0})`;
+        ctx.fillText(chars[Math.random() * chars.length | 0], i * fs, drops[i] * fs);
+        if (drops[i] * fs > c.height && Math.random() > 0.97) drops[i] = 0;
+        drops[i]++;
+      }
+      // horizontal glitch slices
+      if (fr < 20 && Math.random() > 0.55) {
+        const sy = Math.random() * c.height | 0;
+        const sh = 5 + Math.random() * 18 | 0;
+        try {
+          const sl = ctx.getImageData(0, sy, c.width, sh);
+          ctx.putImageData(sl, (Math.random() - 0.5) * 28, sy);
+        } catch(e) {}
+      }
+      fr++;
+      if (fr < 54) {
+        requestAnimationFrame(tick);
+      } else {
+        let op = 1;
+        const fader = setInterval(() => {
+          op -= 0.1;
+          c.style.opacity = Math.max(0, op) + '';
+          if (op <= 0) {
+            clearInterval(fader);
+            ctx.clearRect(0, 0, c.width, c.height);
+            done();
+          }
+        }, 25);
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────
+// BACKGROUND MATRIX
+// ──────────────────────────────────────────────────────────────
+(function initBg() {
+  const c = $('bgC');
+  function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+  const ctx = c.getContext('2d');
+  const chars = '01アイ☢░▓'.split('');
+  const fs = 16;
+  const cols = Math.floor(c.width / fs);
+  const drops = Array.from({ length: cols }, () => Math.random() * c.height / fs);
+  setInterval(() => {
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.font = fs + 'px monospace';
+    for (let i = 0; i < drops.length; i++) {
+      ctx.fillStyle = `rgba(0,${(115 + Math.random() * 140) | 0},0,0.35)`;
+      ctx.fillText(chars[Math.random() * chars.length | 0], i * fs, drops[i] * fs);
+      if (drops[i] * fs > c.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }, 100);
+})();
+
+// ──────────────────────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────────────────────
+render(getQs());
+</script>
+</body>
+</html>
